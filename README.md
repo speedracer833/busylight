@@ -1,5 +1,7 @@
 # MicroPython Busy Light
 
+> **⚠️ WORK IN PROGRESS**: This project is currently under development and awaiting hardware for testing. The code is untested and may require adjustments once hardware testing begins.
+
 A smart busy light system using a Seeed Studio XIAO RP2350 and WS2812B 8x8 LED Matrix that integrates with Google Calendar. The display shows your current availability and meeting time information:
 
 - Red: In a meeting
