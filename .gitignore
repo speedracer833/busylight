@@ -20,4 +20,7 @@ env/
 .micropythonrc
 
 # Project specific
-config_local.py  # For local configuration with sensitive data 
+config_local.py
+
+# Logs
+*.log 

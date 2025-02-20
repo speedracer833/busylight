@@ -1,27 +1,32 @@
 import ntptime
 import time
+from datetime import datetime, timezone
 import config
-import machine
 
 class TimeManager:
-    def __init__(self):
+    def __init__(self, logger):
         self.last_sync = 0
         self.last_sync_success = 0
         self.drift_history = []  # Store recent drift measurements
         self.current_server_index = 0
+        self.logger = logger
         
     def _try_ntp_server(self, server):
         """Try to sync with a specific NTP server"""
         try:
+            self.logger.debug(f"Attempting to sync with NTP server: {server}")
             ntptime.host = server
             ntptime.settime()
+            self.logger.debug(f"Successfully synced with {server}")
             return True
-        except:
+        except Exception as e:
+            self.logger.warning(f"Failed to sync with {server}: {str(e)}")
             return False
             
     def _calculate_drift(self):
         """Calculate time drift since last sync"""
         if not self.last_sync_success:
+            self.logger.debug("No previous successful sync, skipping drift calculation")
             return None
             
         # Get current time before sync
@@ -40,12 +45,16 @@ class TimeManager:
             if len(self.drift_history) > 5:
                 self.drift_history.pop(0)
                 
+            self.logger.debug(f"Calculated drift: {drift} seconds")
             return drift
+            
+        self.logger.warning("Failed to calculate drift - sync failed")
         return None
         
     def _get_average_drift_rate(self):
         """Calculate average drift rate in seconds per hour"""
         if not self.drift_history:
+            self.logger.debug("No drift history available")
             return None
             
         total_drift = sum(self.drift_history)
@@ -53,31 +62,37 @@ class TimeManager:
         time_span = (time.time() - self.last_sync_success) / 3600  # Convert to hours
         
         if time_span > 0:
-            return avg_drift / time_span
+            drift_rate = avg_drift / time_span
+            self.logger.debug(f"Average drift rate: {drift_rate} seconds/hour")
+            return drift_rate
+            
+        self.logger.warning("Invalid time span for drift calculation")
         return None
         
     def sync_time(self):
         """Synchronize time with NTP server with retry logic"""
+        self.logger.info("Starting time synchronization")
+        
         # First try primary server
         if self._try_ntp_server(config.NTP_SERVER):
             self.last_sync = time.time()
             self.last_sync_success = self.last_sync
-            print("Time synchronized with primary NTP server")
+            self.logger.info("Time synchronized with primary NTP server")
             return True
             
         # If primary fails, try backup servers
         for server in config.NTP_BACKUP_SERVERS:
-            print(f"Trying backup NTP server: {server}")
+            self.logger.info(f"Trying backup NTP server: {server}")
             if self._try_ntp_server(server):
                 self.last_sync = time.time()
                 self.last_sync_success = self.last_sync
-                print(f"Time synchronized with backup NTP server: {server}")
+                self.logger.info(f"Time synchronized with backup NTP server: {server}")
                 return True
                 
             # Wait before trying next server
             time.sleep(1)
             
-        print("All NTP servers failed")
+        self.logger.error("All NTP servers failed")
         return False
         
     def ensure_time_synced(self):
@@ -89,12 +104,14 @@ class TimeManager:
         
         # Check if it's time to sync
         if time_since_sync >= config.NTP_SYNC_INTERVAL:
+            self.logger.debug("Sync interval reached, checking drift")
+            
             # Calculate drift
             drift = self._calculate_drift()
             
             # If drift is significant (more than 1 second), sync immediately
             if drift and abs(drift) > 1:
-                print(f"Significant drift detected: {drift} seconds")
+                self.logger.warning(f"Significant drift detected: {drift} seconds")
                 return self.sync_time()
                 
             # Get average drift rate
@@ -102,14 +119,17 @@ class TimeManager:
             
             # If drift rate is high, decrease sync interval
             if drift_rate and abs(drift_rate) > 1:  # More than 1 second per hour
-                print(f"High drift rate detected: {drift_rate} seconds/hour")
+                self.logger.warning(f"High drift rate detected: {drift_rate} seconds/hour")
                 # Temporarily reduce sync interval by half
                 if time_since_sync >= (config.NTP_SYNC_INTERVAL / 2):
+                    self.logger.info("Performing early sync due to high drift rate")
                     return self.sync_time()
             
             # Normal sync interval
+            self.logger.info("Performing regular sync")
             return self.sync_time()
             
+        self.logger.debug("Time sync not needed yet")
         return True
     
     def get_utc_timestamp(self):
@@ -118,21 +138,10 @@ class TimeManager:
     
     def format_utc_datetime(self, timestamp):
         """Format timestamp as UTC datetime string for Google Calendar API"""
-        tm = time.gmtime(timestamp)
-        return "{:04d}-{:02d}-{:02d}T{:02d}:{:02d}:{:02d}Z".format(
-            tm[0], tm[1], tm[2], tm[3], tm[4], tm[5]
-        )
+        dt = datetime.fromtimestamp(timestamp, timezone.utc)
+        return dt.strftime("%Y-%m-%dT%H:%M:%SZ")
     
     def parse_datetime(self, dt_str):
         """Parse datetime string from Google Calendar API to timestamp"""
-        # Format: "2024-03-20T15:30:00Z"
-        year = int(dt_str[0:4])
-        month = int(dt_str[5:7])
-        day = int(dt_str[8:10])
-        hour = int(dt_str[11:13])
-        minute = int(dt_str[14:16])
-        second = int(dt_str[17:19])
-        
-        # Convert to tuple for mktime (year, month, day, hour, minute, second, weekday, yearday)
-        dt_tuple = (year, month, day, hour, minute, second, 0, 0)
-        return time.mktime(dt_tuple) 
+        dt = datetime.strptime(dt_str, "%Y-%m-%dT%H:%M:%SZ")
+        return dt.replace(tzinfo=timezone.utc).timestamp() 

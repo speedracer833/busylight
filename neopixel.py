@@ -1,37 +1,21 @@
-import array, time
 from machine import Pin
-import rp2
+import neopixel
 import config
-
-@rp2.asm_pio(sideset_init=rp2.PIO.OUT_LOW, out_shiftdir=rp2.PIO.SHIFT_LEFT, autopull=True, pull_thresh=24)
-def ws2812():
-    T1 = 2
-    T2 = 5
-    T3 = 3
-    wrap_target()
-    label("bitloop")
-    out(x, 1)               .side(0)    [T3 - 1]
-    jmp(not_x, "do_zero")   .side(1)    [T1 - 1]
-    jmp("bitloop")          .side(1)    [T2 - 1]
-    label("do_zero")
-    nop()                   .side(0)    [T2 - 1]
-    wrap()
 
 class NeoPixel:
     def __init__(self, pin_num, num_leds, brightness=0.3):
         self.num_leds = num_leds
         self.brightness = brightness
-        self.sm = rp2.StateMachine(0, ws2812, freq=8_000_000, sideset_base=Pin(pin_num))
-        self.sm.active(1)
-        self.ar = array.array("I", [0 for _ in range(num_leds)])
+        self.np = neopixel.NeoPixel(Pin(pin_num), num_leds)
         self.width = config.MATRIX_WIDTH
         self.height = config.MATRIX_HEIGHT
 
     def _set_pixel(self, i, color):
+        """Set pixel with brightness adjustment"""
         r = int(color[0] * self.brightness)
         g = int(color[1] * self.brightness)
         b = int(color[2] * self.brightness)
-        self.ar[i] = (g << 16) + (r << 8) + b
+        self.np[i] = (r, g, b)
 
     def set_pixel_xy(self, x, y, color):
         """Set pixel at x,y coordinates (0,0 is top-left)"""
@@ -93,17 +77,15 @@ class NeoPixel:
                     self.set_pixel_xy(col, y, config.COLOR_OFF)
 
     def fill(self, color):
+        """Fill entire matrix with a color"""
         for i in range(self.num_leds):
             self._set_pixel(i, color)
         self.show()
 
     def show(self):
-        for pixel in self.ar:
-            self.sm.put(pixel, 8)
-        time.sleep_ms(10)
+        """Update the display"""
+        self.np.write()
 
     def clear(self):
-        self.fill(config.COLOR_OFF)
-
-    def set_brightness(self, brightness):
-        self.brightness = min(max(brightness, 0.0), 1.0) 
+        """Clear the display"""
+        self.fill(config.COLOR_OFF) 

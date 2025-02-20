@@ -34,39 +34,74 @@ The rightmost column shows:
    - Download the latest MicroPython firmware for RP2040 from [micropython.org](https://micropython.org)
    - Flash the firmware using the appropriate tools
 
-2. Clone this repository:
+2. Install required packages:
+   ```bash
+   mpremote mip install -r requirements.txt
+   ```
+   Or manually install each package:
+   ```bash
+   mpremote mip install micropython-jwt
+   mpremote mip install micropython-base64
+   mpremote mip install micropython-json
+   mpremote mip install micropython-urequests
+   ```
+
+3. Clone this repository:
    ```bash
    git clone https://github.com/speedracer833/busylight.git
    cd busylight
    ```
 
-3. Create your local configuration:
+4. Create your local configuration:
    ```bash
    cp config_template.py config_local.py
    ```
    Edit `config_local.py` with your:
    - WiFi credentials
-   - Google Calendar API credentials
-   - Calendar ID
+   - Service account key (JSON)
+   - Calendar IDs
 
 ## Google Calendar Setup
 
 1. Go to the [Google Cloud Console](https://console.cloud.google.com)
 2. Create a new project
-3. Enable the Google Calendar API
-4. Create OAuth 2.0 credentials
-5. Get your refresh token (see below)
-6. Add the credentials to your `config_local.py`
+3. Enable the Google Calendar API:
+   - Go to "APIs & Services" > "Library"
+   - Search for "Google Calendar API"
+   - Click "Enable"
 
-### Getting a Refresh Token
+4. Create a Service Account:
+   - Go to "IAM & Admin" > "Service Accounts"
+   - Click "Create Service Account"
+   - Name it "busylight-service"
+   - Click "Create and Continue"
+   - Skip role assignment
+   - Click "Done"
 
-1. Create OAuth 2.0 credentials in Google Cloud Console
-2. Download the client configuration
-3. Use the Google OAuth 2.0 Playground to:
-   - Configure your OAuth credentials
-   - Authorize the Calendar API
-   - Exchange authorization code for tokens
-4. Copy the refresh token to your `config_local.py`
+5. Create a Service Account Key:
+   - Click on the service account you just created
+   - Go to "Keys" tab
+   - Click "Add Key" > "Create new key"
+   - Choose "JSON"
+   - Download the key file
+
+6. Share Your Calendars:
+   - Open the downloaded JSON file
+   - Copy the "client_email" value
+   - Go to Google Calendar
+   - For each calendar you want to monitor:
+     - Find the calendar in the left sidebar
+     - Click the three dots > "Settings and sharing"
+     - Under "Share with specific people"
+     - Click "Add people"
+     - Paste the service account email
+     - Set permission to "See all event details"
+     - Click "Send"
+   - Copy each Calendar ID from "Integrate calendar" section
+
+7. Update `config_local.py`:
+   - Paste the entire contents of the service account JSON key file
+   - Add all calendar IDs to the CALENDAR_IDS list
 
 ## Project Structure
 
@@ -81,6 +116,7 @@ The rightmost column shows:
 ## Features
 
 - Real-time calendar status display
+- Multiple calendar support
 - Meeting time remaining indicator
 - Next meeting countdown
 - Automatic time synchronization via NTP
@@ -96,6 +132,45 @@ To contribute:
 3. Make your changes
 4. Submit a pull request
 
+### Pre-commit Hook
+
+This repository includes a pre-commit hook that checks for sensitive information in your commits. The hook will:
+- Scan all staged files for potential sensitive data
+- Check for API keys, tokens, passwords, and other sensitive information
+- Prevent commits that might leak sensitive data
+- Ignore template files and example configurations
+
+To enable the pre-commit hook:
+```bash
+chmod +x .git/hooks/pre-commit
+```
+
+The hook checks for:
+- Private keys and secrets
+- API tokens and keys
+- Passwords and credentials
+- WiFi configurations
+- Email addresses
+- URLs and endpoints
+- Other potentially sensitive data
+
+If sensitive data is found, the commit will be blocked and you'll see:
+- The file containing sensitive data
+- The line number where it was found
+- A description of the sensitive data
+- The actual content that triggered the warning
+
+To bypass the hook in special cases (use with caution):
+```bash
+git commit --no-verify
+```
+
+Note: The hook ignores:
+- Files in `.git`, `venv`, `__pycache__`, and `node_modules`
+- The `config_local.py` file (where your actual credentials should be stored)
+- Template files with placeholder values
+- Comments containing example data
+
 ## Troubleshooting
 
 1. If the LED matrix doesn't light up:
@@ -105,7 +180,8 @@ To contribute:
 
 2. If calendar events aren't updating:
    - Check your WiFi connection
-   - Verify your Google Calendar API credentials
+   - Verify your service account key
+   - Check that calendars are shared with the service account
    - Check the serial output for error messages
 
 3. If time sync fails:

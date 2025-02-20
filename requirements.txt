@@ -1,0 +1,7 @@
+micropython-jwt==0.3.0
+micropython-base64==3.4.3
+micropython-json==3.4.0
+micropython-urequests==0.6
+micropython-neopixel==0.0.3
+micropython-datetime==3.4.3
+micropython-logging==0.5.4 
